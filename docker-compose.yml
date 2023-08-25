@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15.1-alpine
+    container_name: db
+    env_file:
+      - .env.prod
+    volumes:
+      - postgres-data:/var/lib/postgresql/data/
+    restart: always
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app
+    image: ${BASE_IMAGE_TAG:-sibdev_image}
+    command: /bin/bash -c "
+      while !</dev/tcp/db/5432; do sleep 1; done;
+      python manage.py migrate --no-input &&
+      gunicorn core.wsgi:application -b 0.0.0.0:8000 --reload --workers 4 --threads 2 --timeout 60
+      "
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    env_file:
+      - .env.prod
+    restart: always
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+    volumes:
+      - redis-data:/var/lib/redis/data
+    env_file:
+      - .env.prod
+
+volumes:
+  postgres-data:
+  redis-data:
